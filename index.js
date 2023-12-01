@@ -2,9 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const app = express();
 const PORT = 5544;
-
 app.use(express.json());
-
 mongoose.connect("mongodb+srv://pawa:ahmer123@cluster0.974rwur.mongodb.net/your-database-name"
 )
   .then(() => {
@@ -133,26 +131,19 @@ app.post("/books/:bookId/comments/:commentsId/like", async (req, res) => {
     if (!book) {
       return res.status(404).json({ error: "Book not found" });
     }
-
     const comment = book.comments.id(commentsId);
     if (!comment) {
       return res.status(404).json({ message: "Comment not found" });
     }
-
     // Check if the user has already disliked the comment
     if (comment.likedBy.includes(userName)) {
       return res.status(400).json({ error: "You have already liked this comment" });
     }
-
     // Increment the dislikes counter and add the user to dislikedBy array
     comment.likes += 1;
     comment.likedBy.push(userName);
-
     await book.save();
-
-    // Remove null values from dislikedBy array in the response
     comment.likedBy = comment.likedBy.filter(Boolean);
-
     res.json({
       message: "Comment liked successfully",
       book: {
@@ -174,32 +165,25 @@ app.post("/books/:bookId/comments/:commentId/dislike", async (req, res) => {
   const bookId = req.params.bookId;
   const commentId = req.params.commentId;
   const userName = req.body.userName;
-
   try {
     const book = await Book.findById(bookId);
-
     if (!book) {
       return res.status(404).json({ error: "Book not found" });
     }
-
     const comment = book.comments.id(commentId);
     if (!comment) {
       return res.status(404).json({ message: "Comment not found" });
     }
-
     // Check if the user has already disliked the comment
     if (comment.dislikedBy.includes(userName)) {
       return res.status(400).json({ error: "You have already disliked this comment" });
     }
-
     // Increment the dislikes counter and add the user to dislikedBy array
     comment.dislikes += 1;
     comment.dislikedBy.push(userName);
     await book.save();
-
     // Remove null values from dislikedBy array in the response
     comment.dislikedBy = comment.dislikedBy.filter(Boolean);
-
     res.json({
       message: "Comment disliked successfully",
       book: {
@@ -216,7 +200,6 @@ app.post("/books/:bookId/comments/:commentId/dislike", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
 // Update a book by ID
 app.put("/books/:id", async (req, res) => {
   const bookId = req.params.id;
@@ -253,10 +236,3 @@ app.delete("/api/data", async (req, res) => {
     res.status(404).json({ error: "error deletng data" })
   }
 })
-// echo "# Book-directory" >> README.md
-//   git init
-//   git add README.md
-//   git commit -m "first commit"
-//   git branch -M main
-//   git remote add origin git@github.com:AhmerHafeez/Book-directory.git
-//   git push -u origin main
