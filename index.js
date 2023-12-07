@@ -16,6 +16,12 @@ const bookSchema = new mongoose.Schema({
   title: String,
   author: String,
   genre: String,
+  borrowedBy: {
+    user: String, 
+    borrowDate: Date,
+    returnDate: Date,
+    additionalCharges: { type: Number, default: 0 },
+  },
   comments: [{
     _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
     user: String,
@@ -56,12 +62,68 @@ app.get("/books", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-// Get all books
-app.get("/books", async (req, res) => {
+// Borrow a book
+app.post("/books/:id/borrow", async (req, res) => {
+  const bookId = req.params.id;
+  const { user } = req.body;
+  const borrowDate = new Date();
+  const returnDate = new Date();
+  returnDate.setDate(returnDate.getDate() + 7);
+
   try {
-    const books = await Book.find();
-    res.json(books);
+    const book = await Book.findById(bookId);
+
+    if (!book) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    if (book.borrowedBy && book.borrowedBy.user) {
+      console.log("Book already borrowed by:", book.borrowedBy.user);
+      return res.status(400).json({ error: "Book is already borrowed", currentBorrower: book.borrowedBy.user });
+    }
+
+    // Update book status
+    book.borrowedBy = { user: user || "defaultUser", borrowDate, returnDate, additionalCharges: 0 };
+    const result = await book.save();
+
+    res.json({
+      message: "Book borrowed successfully",
+      book: result,
+    });
   } catch (error) {
+    console.error("Error borrowing book:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+// Return a borrowed book
+app.post("/books/:id/return", async (req, res) => {
+  const bookId = req.params.id;
+  const { user } = req.body;
+  try {
+    const book = await Book.findById(bookId);
+    if (!book) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    if (!book.borrowedBy || book.borrowedBy.user !== user) {
+      return res.status(400).json({ error: "Book is not borrowed by the specified user" });
+    }
+    // Calculate additional charges if returned after one week
+    const returnDate = new Date();
+    if (returnDate > new Date(book.borrowedBy.returnDate)) {
+      const daysOverdue = Math.ceil((returnDate - book.borrowedBy.returnDate) / (1000 * 60 * 60 * 24));
+      book.borrowedBy.additionalCharges = daysOverdue * 5; // Additional charges: $5 per day overdue
+    }
+    // Update book status
+    book.borrowedBy.returnDate = returnDate;
+    const result = await book.save();
+
+    res.json({
+      message: "Book returned successfully",
+      book: result,
+    });
+  } catch (error) {
+    console.error("Error returning book:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -76,8 +138,33 @@ app.get("/books/search", async (req, res) => {
         { genre: { $regex: query, $options: "i" } },
       ],
     });
-    res.json(results);
+     // Populate borrowing status information
+     const populatedResults = await Promise.all(results.map(async (book) => {
+      if (book.borrowedBy) {
+        // If the book is borrowed, fetch additional borrowing information
+        const borrowedByUser = book.borrowedBy.user;
+        const borrowDate = book.borrowedBy.borrowDate;
+        const returnDate = book.borrowedBy.returnDate;
+        return {
+          ...book.toObject(),
+          borrowingStatus: {
+            borrowedByUser,
+            borrowDate,
+            returnDate,
+          },
+        };
+      } else {
+        return {
+          ...book.toObject(),
+          borrowingStatus: {
+            isBorrowed: false,
+          },
+        };
+      }
+    }));
+    res.json(populatedResults);
   } catch (error) {
+    console.error("Error in search:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -235,4 +322,4 @@ app.delete("/api/data", async (req, res) => {
   } catch (error) {
     res.status(404).json({ error: "error deletng data" })
   }
-})
+});
